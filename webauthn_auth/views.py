@@ -97,17 +97,14 @@ def begin_authentication(request):
 
         data = doc.to_dict()
 
-        credential_id = (
-            data.get("credential_id")
-            or data.get("credentialId")
-        )
-
-        if not credential_id:
+        if "credentialId" not in data:
             continue
 
         credentials.append(
             PublicKeyCredentialDescriptor(
-                id=base64.b64decode(credential_id)
+                id=base64.b64decode(
+                    data["credentialId"]
+                )
             )
         )
 
@@ -115,7 +112,7 @@ def begin_authentication(request):
         return JsonResponse(
             {
                 "success": False,
-                "message": "No biometric credentials registered."
+                "message": "No biometric credentials found."
             },
             status=404,
         )
