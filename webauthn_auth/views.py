@@ -1,6 +1,8 @@
 import base64
 import json
 
+from webauthn import verify_authentication_response
+
 from webauthn import generate_authentication_options
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 
@@ -135,6 +137,61 @@ def begin_authentication(request):
 @csrf_exempt
 @require_POST
 def finish_authentication(request):
-    return JsonResponse({
-        "success": True
-    })
+    body = json.loads(request.body)
+
+    firebase_uid = request.session.get("firebase_uid")
+    challenge = request.session.get("authentication_challenge")
+
+    if not firebase_uid or not challenge:
+        return JsonResponse(
+            {
+                "success": False,
+                "message": "Authentication session expired."
+            },
+            status=400,
+        )
+
+    credential_doc = (
+        db.collection("webauthn_credentials")
+        .document(firebase_uid)
+        .get()
+    )
+
+    if not credential_doc.exists:
+        return JsonResponse(
+            {
+                "success": False,
+                "message": "Credential not found."
+            },
+            status=404,
+        )
+
+    credential = credential_doc.to_dict()
+
+    verification = verify_authentication_response(
+        credential=body,
+        expected_challenge=bytes.fromhex(challenge),
+        expected_origin="https://kenjie.pythonanywhere.com",
+        expected_rp_id="kenjie.pythonanywhere.com",
+        credential_public_key=base64.b64decode(
+            credential["public_key"]
+        ),
+        credential_current_sign_count=credential["sign_count"],
+        require_user_verification=True,
+    )
+
+    db.collection("webauthn_credentials").document(firebase_uid).update(
+        {
+            "sign_count": verification.new_sign_count
+        }
+    )
+
+    request.session.pop("authentication_challenge", None)
+    request.session.pop("firebase_uid", None)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "Biometric authentication successful."
+        }
+    )
