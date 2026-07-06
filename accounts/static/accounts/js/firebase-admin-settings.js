@@ -348,6 +348,23 @@ function base64urlToUint8Array(base64url) {
 
 }
 
+function bufferToBase64url(buffer) {
+
+    const bytes = new Uint8Array(buffer);
+
+    let binary = "";
+
+    bytes.forEach(byte => {
+        binary += String.fromCharCode(byte);
+    });
+
+    return btoa(binary)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+
+}
+
 async function registerBiometric() {
 
     try {
@@ -365,32 +382,35 @@ async function registerBiometric() {
 
         }
 
-        const response = await fetch(
+        // Begin registration
+        const beginResponse = await fetch(
             "/webauthn/register/begin/",
             {
                 method: "POST",
-
                 headers: {
                     "Content-Type": "application/json",
                     "X-CSRFToken": getCookie("csrftoken")
                 },
-
                 body: JSON.stringify({
-
                     firebaseUid: currentUser.uid,
-
                     email: currentUser.email,
-
                     displayName:
                         currentUser.displayName ||
                         "Aqua Admin"
-
                 })
-
             }
         );
 
-        const options = await response.json();
+        const options = await beginResponse.json();
+
+        if (!beginResponse.ok) {
+
+            throw new Error(
+                options.message ||
+                "Unable to begin registration."
+            );
+
+        }
 
         options.challenge =
             base64urlToUint8Array(options.challenge);
@@ -402,50 +422,70 @@ async function registerBiometric() {
 
             options.excludeCredentials =
                 options.excludeCredentials.map(
-
                     credential => ({
-
                         ...credential,
-
                         id: base64urlToUint8Array(
                             credential.id
                         )
-
                     })
-
                 );
 
         }
 
-        console.log("Registration Options:", options);
+        // Create credential
+        const credential =
+            await navigator.credentials.create({
+                publicKey: options
+            });
 
-        console.log(options);
+        // Finish registration
+        const finishResponse = await fetch(
+            "/webauthn/register/finish/",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": getCookie("csrftoken")
+                },
+                body: JSON.stringify({
 
-console.log(
-    "challenge:",
-    options.challenge,
-    options.challenge.constructor.name
-);
+                    id: credential.id,
 
-console.log(
-    "user.id:",
-    options.user.id,
-    options.user.id.constructor.name
-);
+                    rawId: bufferToBase64url(
+                        credential.rawId
+                    ),
 
-console.log(
-    "rp.id:",
-    options.rp.id
-);
+                    type: credential.type,
 
-const credential =
-    await navigator.credentials.create({
+                    response: {
 
-        publicKey: options
+                        clientDataJSON:
+                            bufferToBase64url(
+                                credential.response.clientDataJSON
+                            ),
 
-    });
+                        attestationObject:
+                            bufferToBase64url(
+                                credential.response.attestationObject
+                            )
 
-        console.log("Credential:", credential);
+                    }
+
+                })
+            }
+        );
+
+        const result =
+            await finishResponse.json();
+
+        if (!finishResponse.ok || !result.success) {
+
+            throw new Error(
+                result.message ||
+                "Registration failed."
+            );
+
+        }
 
         showToast(
             "Biometric registered successfully."
@@ -458,6 +498,7 @@ const credential =
         console.error(error);
 
         showToast(
+            error.message ||
             "Biometric registration failed.",
             "error"
         );
