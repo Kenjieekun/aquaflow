@@ -91,13 +91,13 @@ def finish_registration(request):
 @require_POST
 def begin_authentication(request):
 
-    credentials = []
+    allow_credentials = []
 
     for doc in db.collection("webauthn_credentials").stream():
 
         data = doc.to_dict()
 
-        credentials.append(
+        allow_credentials.append(
 
             PublicKeyCredentialDescriptor(
 
@@ -113,7 +113,7 @@ def begin_authentication(request):
 
         rp_id="kenjie.pythonanywhere.com",
 
-        allow_credentials=credentials,
+        allow_credentials=allow_credentials,
 
     )
 
