@@ -158,4 +158,4 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 FIREBASE_ADMIN_SDK = BASE_DIR / "firebase-admin-sdk.json"
 
 WEBAUTHN_RP_NAME = "AquaFlow"
-WEBAUTHN_RP_ID = "127.0.0.1"
+WEBAUTHN_RP_ID = "https://kenjie.pythonanywhere.com"
